@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#080b0f">
+<meta name="format-detection" content="telephone=no">
+<title>PPG AIR — LZ</title>
+<style>
+:root{
+  --bg:#080b0f; --panel:#101821; --panel2:#16202b; --raise:#1d2935;
+  --line:#2b3947; --txt:#e6eef5; --dim:#aebecb; --faint:#8698a6;
+  --info:#5cb3e8; --go:#35c97a; --watch:#efcb3f; --caution:#f7963a; --nogo:#f2564a;
+  --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;
+  --ui:system-ui,-apple-system,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--ui);
+  -webkit-text-size-adjust:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+body{padding:calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+  calc(12px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:8px;min-height:100dvh}
+button,input{font:inherit;color:inherit}
+button{min-height:48px;border:1px solid var(--line);background:var(--raise);border-radius:4px;padding:12px 14px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:12px;font:800 18px/1.2 var(--mono)}
+label{display:block;font:800 11px/1.3 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.bar b{font:800 15px/1.1 var(--mono)}
+.bar span{font:700 13px/1.2 var(--mono);color:var(--dim)}
+.led{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--st,#7c8b98);margin-right:6px}
+.warn{display:none;background:var(--nogo);color:#fff;padding:12px 14px;font:800 18px/1.3 var(--ui);border-radius:4px}
+.warn.on{display:block}
+.hero{background:var(--panel);border:1px solid var(--line);border-left:8px solid var(--st,#7c8b98);border-radius:4px;padding:10px 12px}
+.hero .k{font:800 12px/1.2 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.hero .v{font:800 clamp(52px,16vw,92px)/.95 var(--mono);color:var(--st,#e6eef5)}
+.hero .s{font:700 clamp(15px,4vw,20px)/1.3 var(--mono);color:var(--dim);margin-top:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.cell{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--st,#2b3947);border-radius:4px;padding:8px 10px}
+.cell .k{font:800 11px/1.2 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.cell .v{font:800 clamp(26px,8vw,40px)/1.05 var(--mono)}
+.cell .s{font:600 13px/1.3 var(--mono);color:var(--dim)}
+.note{font:600 13px/1.4 var(--mono);color:var(--faint)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.setup{display:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px}
+.setup.on{display:block}
+.btns{display:flex;gap:7px}
+.btns button{flex:1}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <b>PPG AIR</b>
+    <span><i class="led" id="gled"></i><span id="gst">GPS OFF</span> · <span id="clock">—</span></span>
+  </div>
+  <div class="warn" id="warn"></div>
+
+  <div class="hero" id="hero">
+    <div class="k">Time to landing zone</div>
+    <div class="v">—</div>
+    <div class="s">Waiting for GPS. Use this page over https and allow location.</div>
+  </div>
+
+  <div class="grid">
+    <div class="cell" id="c-dist"><div class="k">Distance</div><div class="v">—</div><div class="s">to saved LZ</div></div>
+    <div class="cell" id="c-brg"><div class="k">Course home</div><div class="v">—</div><div class="s">from where you are</div></div>
+    <div class="cell" id="c-gs"><div class="k">GPS speed</div><div class="v">—</div><div class="s">your ground speed</div></div>
+    <div class="cell" id="c-trk"><div class="k">GPS track</div><div class="v">—</div><div class="s">where you are going</div></div>
+    <div class="cell" id="c-pwr"><div class="k">Power</div><div class="v">—</div><div class="s">battery vs time home</div></div>
+    <div class="cell" id="c-wind"><div class="k">Wind used</div><div class="v">—</div><div class="s">typed, or last airport</div></div>
+  </div>
+  <p class="note" id="trust">Trust order in the air: wing and sock, then this GPS time, then airport wind. Airport wind is never “now at your wing.”</p>
+
+  <div class="btns">
+    <button type="button" id="setupbtn">Setup</button>
+    <button type="button" id="lznav">Use my GPS as LZ</button>
+  </div>
+
+  <div class="setup" id="setup">
+    <div class="row">
+      <div><label for="air">Air speed (mph)</label><input id="air" type="number" value="26" min="5" step="1"></div>
+      <div><label for="pwr">Power left (min)</label><input id="pwr" type="number" value="30" min="0" step="1"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><label for="wdir">Wind from (°)</label><input id="wdir" type="number" value="" min="0" max="360" placeholder="blank = airport"></div>
+      <div><label for="wspd">Wind (mph)</label><input id="wspd" type="number" value="" min="0" step="1" placeholder="blank = airport"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><label for="lzlat">LZ latitude</label><input id="lzlat" type="number" step="0.0001" value="40.9243"></div>
+      <div><label for="lzlon">LZ longitude</label><input id="lzlon" type="number" step="0.0001" value="-81.6318"></div>
+    </div>
+    <p class="note" style="margin:10px 0 8px">Air speed is what you fly through the air. Time home uses your live GPS when you are moving toward the LZ. If you are circling, it uses air speed and wind instead and says so.</p>
+    <div class="btns">
+      <button type="button" id="save">Save</button>
+      <button type="button" id="close">Close</button>
+    </div>
+  </div>
+
+<script>
+const R=3958.8, rad=x=>x*Math.PI/180, deg=x=>x*180/Math.PI;
+const card=d=>["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(((d%360)+360)%360/22.5)%16];
+const fmt=d=>{const h=d.getHours();return `${(h%12)||12}:${String(d.getMinutes()).padStart(2,"0")} ${h<12?"AM":"PM"}`;};
+function dist(a,b,c,d){const dLat=rad(c-a),dLon=rad(d-b);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));}
+function bearing(a,b,c,d){const y=Math.sin(rad(d-b))*Math.cos(rad(c));
+  const x=Math.cos(rad(a))*Math.sin(rad(c))-Math.sin(rad(a))*Math.cos(rad(c))*Math.cos(rad(d-b));
+  return (deg(Math.atan2(y,x))+360)%360;}
+function solve(distMi,course,air,wdir,wspd){
+  if(!(air>0)||distMi==null) return {ok:false,msg:"Need air speed"};
+  if(wspd==null||wdir==null) return {ok:false,msg:"No wind entered"};
+  const th=(wdir-course)*Math.PI/180, head=wspd*Math.cos(th), cross=Math.abs(wspd*Math.sin(th));
+  if(cross>=air) return {ok:false,msg:"Crosswind stronger than air speed"};
+  const gs=Math.sqrt(air*air-cross*cross)-head;
+  if(gs<=0.5) return {ok:false,msg:"No headway into this wind"};
+  return {ok:true,gs,min:Math.ceil(distMi/gs*60),head,cross};
+}
+
+const KEY="ppg_air_lz_v1";
+const S={
+  lz:{n:"Clinton launch",lat:40.9243,lon:-81.6318},
+  air:26, pwr:30, wdir:null, wspd:null,
+  fix:null, gpsErr:null,
+  metar:null, alerts:[]
+};
+function load(){
+  try{
+    const v=JSON.parse(localStorage.getItem(KEY)||"null");
+    if(!v) return;
+    if(v.lz) S.lz=v.lz;
+    if(+v.air>0) S.air=+v.air;
+    if(+v.pwr>=0) S.pwr=+v.pwr;
+    if(v.wdir!=null&&v.wdir!=="") S.wdir=+v.wdir;
+    if(v.wspd!=null&&v.wspd!=="") S.wspd=+v.wspd;
+  }catch(e){}
+}
+function persist(){
+  try{ localStorage.setItem(KEY,JSON.stringify({lz:S.lz,air:S.air,pwr:S.pwr,wdir:S.wdir,wspd:S.wspd})); }catch(e){}
+}
+function fillForm(){
+  document.getElementById("air").value=S.air;
+  document.getElementById("pwr").value=S.pwr;
+  document.getElementById("wdir").value=S.wdir??"";
+  document.getElementById("wspd").value=S.wspd??"";
+  document.getElementById("lzlat").value=S.lz.lat.toFixed(4);
+  document.getElementById("lzlon").value=S.lz.lon.toFixed(4);
+}
+load(); fillForm();
+
+function windNow(){
+  if(S.wdir!=null&&S.wspd!=null) return {dir:S.wdir,spd:S.wspd,src:"typed",age:0};
+  if(S.metar&&S.metar.spd!=null&&S.metar.dir!=null)
+    return {dir:S.metar.dir,spd:S.metar.spd,src:S.metar.id,age:(Date.now()-S.metar.when)/60000};
+  return null;
+}
+
+function paint(){
+  document.getElementById("clock").textContent=fmt(new Date());
+  const led=document.getElementById("gled"), gst=document.getElementById("gst");
+  const fix=S.fix, age=fix?(Date.now()-fix.t)/1000:null;
+  const gpsOk=fix&&age!=null&&age<8&&fix.acc!=null&&fix.acc<40;
+  led.style.setProperty("--st", !fix||S.gpsErr?"var(--nogo)":age>8?"var(--caution)":"var(--go)");
+  gst.textContent = S.gpsErr?"GPS FAIL":!fix?"GPS…":age>8?`GPS ${Math.round(age)}s`:`GPS ${Math.round(fix.acc)} m`;
+
+  const warn=document.getElementById("warn");
+  const bad=(S.alerts||[]).filter(e=>/Tornado Warning|Severe Thunderstorm Warning/i.test(e));
+  if(bad.length){ warn.textContent="LAND — "+bad.join(" + "); warn.classList.add("on"); }
+  else warn.classList.remove("on");
+
+  const hero=document.getElementById("hero");
+  if(!fix){
+    hero.style.setProperty("--st","#7c8b98");
+    hero.querySelector(".v").textContent="NO GPS";
+    hero.querySelector(".s").textContent=S.gpsErr||"Allow location. This page must be opened from https, not a Downloads file.";
+    return;
+  }
+  const d=dist(fix.lat,fix.lon,S.lz.lat,S.lz.lon);
+  const brg=bearing(fix.lat,fix.lon,S.lz.lat,S.lz.lon);
+  const gs=fix.spd, trk=fix.trk;
+  let closing=null;
+  if(gs!=null&&trk!=null&&gs>0.8){
+    let diff=trk-brg; if(diff>180)diff-=360; if(diff<-180)diff+=360;
+    closing=gs*Math.cos(rad(diff));
+  }
+  const w=windNow();
+  const planned=w?solve(d,brg,S.air,w.dir,w.spd):{ok:false,msg:"No wind to plan with"};
+  let mode, minutes, why, col;
+  if(closing!=null&&closing>2){
+    minutes=Math.ceil(d/closing*60);
+    mode="GPS";
+    why=`At this ground speed toward the LZ (${closing.toFixed(0)} mph closing). Distance ${d.toFixed(1)} mi.`;
+    col = minutes>S.pwr?"var(--nogo)":minutes>S.pwr*0.7?"var(--caution)":"var(--go)";
+  } else if(planned.ok){
+    minutes=planned.min;
+    mode="PLANNED";
+    why=`Not closing on the LZ yet (circling or leaving). This is air speed ${S.air} mph vs ${w.src} wind ${w.spd} mph${w.src!=="typed"?` · ${Math.round(w.age)} min old`:""}.`;
+    col = minutes>S.pwr?"var(--nogo)":"var(--watch)";
+  } else {
+    minutes=null;
+    mode="NO TIME";
+    why=closing!=null&&closing<=2?"You are not moving toward the LZ, and there is no usable wind number.":planned.msg;
+    col="var(--nogo)";
+  }
+  hero.style.setProperty("--st",col);
+  hero.querySelector(".k").textContent = minutes!=null?`${mode} · time to landing zone`:`Time to landing zone`;
+  hero.querySelector(".v").textContent = minutes==null?"—":minutes+" min";
+  hero.querySelector(".s").textContent = why + (minutes!=null?`  Power left ${S.pwr} min.`:"");
+
+  const set=(id,v,s,st)=>{const el=document.getElementById(id); el.style.setProperty("--st",st||"#2b3947"); el.querySelector(".v").textContent=v; if(s) el.querySelector(".s").textContent=s;};
+  set("c-dist",d.toFixed(1)+" mi",S.lz.n||"saved LZ");
+  set("c-brg",Math.round(brg)+"°",card(brg));
+  set("c-gs",gs==null?"—":Math.round(gs)+" mph", age>8?"GPS stale":"live GPS");
+  set("c-trk",trk==null?"—":Math.round(trk)+"°", trk==null?"no track yet":card(trk));
+  if(minutes==null) set("c-pwr",S.pwr+" min","no time home yet", "var(--caution)");
+  else set("c-pwr", minutes>S.pwr?"SHORT":(S.pwr-minutes)+" min",
+    minutes>S.pwr?`${minutes} min home > ${S.pwr} min power`:`spare if you turn home now`,
+    minutes>S.pwr?"var(--nogo)":"var(--go)");
+  if(!w) set("c-wind","NONE","type wind in Setup, or wait for airport","var(--caution)");
+  else set("c-wind",`${w.dir}°/${w.spd}`,
+    w.src==="typed"?"your number":`${w.src} · ${Math.round(w.age)} min old · not the wing`,
+    w.src!=="typed"&&w.age>20?"var(--caution)":"#2b3947");
+
+  document.getElementById("trust").textContent =
+    gpsOk?`GPS good (${Math.round(fix.acc)} m). Time above is ${mode==="GPS"?"your real closing speed":"a plan, not a measurement"}.`
+    :`GPS is weak or old. Do not use the time as a number to stretch the flight.`;
+}
+
+function startGps(){
+  if(!navigator.geolocation){ S.gpsErr="This browser has no GPS."; paint(); return; }
+  navigator.geolocation.watchPosition(p=>{
+    S.gpsErr=null;
+    S.fix={
+      lat:p.coords.latitude, lon:p.coords.longitude,
+      acc:p.coords.accuracy,
+      spd:p.coords.speed==null?null:p.coords.speed*2.23694,
+      trk:p.coords.heading==null||isNaN(p.coords.heading)?null:p.coords.heading,
+      t:Date.now()
+    };
+    paint();
+  }, e=>{
+    S.gpsErr=e.message||"GPS blocked";
+    paint();
+  }, {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
+}
+
+async function loadMetar(){
+  const lat=S.fix?S.fix.lat:S.lz.lat, lon=S.fix?S.fix.lon:S.lz.lon;
+  try{
+    const r=await fetch(`https://aviationweather.gov/api/data/metar?ids=KBJJ,KCAK,KAKR&format=json&hours=2`,{cache:"no-store"});
+    if(!r.ok) throw 0;
+    const j=await r.json();
+    let best=null;
+    for(const row of (Array.isArray(j)?j:[])){
+      const when=row.obsTime?new Date(row.obsTime<1e12?row.obsTime*1000:row.obsTime):null;
+      if(!when||row.wspd==null||row.wdir==null||row.wdir==="VRB") continue;
+      const mi=row.lat!=null?dist(lat,lon,row.lat,row.lon):99;
+      const age=(Date.now()-when)/60000;
+      const score=age*2+mi;
+      if(!best||score<best.score) best={id:row.icaoId,dir:+row.wdir,spd:Math.round(+row.wspd*1.15078),when:+when,score,mi};
+    }
+    S.metar=best;
+  }catch(e){}
+  paint();
+}
+async function loadAlerts(){
+  const lat=S.fix?S.fix.lat:S.lz.lat, lon=S.fix?S.fix.lon:S.lz.lon;
+  try{
+    const r=await fetch(`https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`,{headers:{Accept:"application/geo+json"},cache:"no-store"});
+    if(!r.ok) throw 0;
+    const j=await r.json();
+    S.alerts=(j.features||[]).map(f=>f.properties&&f.properties.event).filter(Boolean);
+  }catch(e){}
+  paint();
+}
+
+document.getElementById("setupbtn").onclick=()=>document.getElementById("setup").classList.toggle("on");
+document.getElementById("close").onclick=()=>document.getElementById("setup").classList.remove("on");
+document.getElementById("save").onclick=()=>{
+  S.air=+document.getElementById("air").value||26;
+  S.pwr=+document.getElementById("pwr").value||0;
+  const wd=document.getElementById("wdir").value, ws=document.getElementById("wspd").value;
+  S.wdir=wd===""?null:+wd; S.wspd=ws===""?null:+ws;
+  S.lz.lat=+document.getElementById("lzlat").value;
+  S.lz.lon=+document.getElementById("lzlon").value;
+  persist(); paint(); document.getElementById("setup").classList.remove("on");
+};
+document.getElementById("lznav").onclick=()=>{
+  if(!S.fix){ alert("Wait for a GPS fix first."); return; }
+  if(!confirm("Set landing zone to where you are standing now?")) return;
+  S.lz={n:"My LZ",lat:S.fix.lat,lon:S.fix.lon};
+  persist(); fillForm(); paint();
+};
+
+let WAKE=null;
+async function keepAwake(){
+  if(!("wakeLock" in navigator)||document.visibilityState!=="visible") return;
+  try{ if(WAKE&&!WAKE.released) return; WAKE=await navigator.wakeLock.request("screen"); }
+  catch(e){ WAKE=null; }
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ keepAwake(); loadMetar(); loadAlerts(); }});
+startGps(); loadMetar(); loadAlerts(); keepAwake();
+setInterval(paint,1000);
+setInterval(loadMetar,60000);
+setInterval(loadAlerts,45000);
+</script>
+</body>
+</html>
